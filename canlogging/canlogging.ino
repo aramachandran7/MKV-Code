@@ -2,6 +2,7 @@
 #include "mcp_can.h"
 #include <SD.h>
 
+
 /*SAMD core*/
 #ifdef ARDUINO_SAMD_VARIANT_COMPLIANCE
   #define SERIAL SerialUSB
@@ -26,6 +27,11 @@ unsigned char buf[8];
 char str[20];
 bool isButtonPressed = true;
 bool addLine = false;
+unsigned long fileClosedTime = 0;
+char filename[30] = "";
+int driverNum = 0;
+int fileNum = 0;
+unsigned int messageCount = 0;
 
 
 void setup()
@@ -47,6 +53,7 @@ void setup()
         while(1);
     }
     SERIAL.println("SD initialization done.");
+    sprintf(filename, "Drive%d-%d.csv", driverNum, fileNum);
 }
 
 void MCP2515_ISR()
@@ -55,32 +62,32 @@ void MCP2515_ISR()
 }
 
 void loop()
-{
-    if(!isButtonPressed && digitalRead(newLinePin)){
-      addLine = true;
-
-    }
-    isButtonPressed = digitalRead(newLinePin);
-    
-    
+{    
     if(flagRecv) 
     {                                   // check if get data
 
         flagRecv = 0;                   // clear flag
         unsigned long id= 0;
-        
-        myFile = SD.open("can.csv", FILE_WRITE);
-        if (addLine) {
-          for(int i = 0; i < 9; i++) {
-            SERIAL.print("99");
-            myFile.print("99");
-            SERIAL.print(",");
-            myFile.print(",");
-          }
-          SERIAL.println();
-          myFile.println();
-          addLine = false;
+
+        if (fileClosedTime + 30000 < millis()){
+          driverNum++;
+          fileNum = 0;
+          messageCount = 0;
+          SERIAL.println("ND");
         }
+//        SERIAL.print(fileClosedTime);
+//        SERIAL.print(" millis");
+//        SERIAL.println(millis());
+//        SERIAL.println(messageCount);
+        if (messageCount > 50000) {
+          fileNum++;
+          messageCount = 0;
+          SERIAL.println("NF");
+        }
+//        SERIAL.println(messageCount);
+        sprintf(filename, "Drive%d-%d", driverNum, fileNum);
+//        SERIAL.println(filename);
+        myFile = SD.open(filename, FILE_WRITE);
 
         // iterate over all pending messages
         // If either the bus is saturated or the MCU is busy,
@@ -90,11 +97,16 @@ void loop()
         {
             // read data,  len: data length, buf: data buf
             CAN.readMsgBufID(&id, &len, buf);
-  
+
+            SERIAL.print(millis());
+            SERIAL.print(",");
             SERIAL.print(id);
             SERIAL.print(",");
+            myFile.print(millis());
+            myFile.print(",");
             myFile.print(id);
             myFile.print(",");
+            messageCount++;
             
             for(int i = 0; i<len; i++)
             {
@@ -109,5 +121,6 @@ void loop()
         }
         
         myFile.close();
+        fileClosedTime = millis();
     }
 }
