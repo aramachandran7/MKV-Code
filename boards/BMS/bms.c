@@ -39,9 +39,9 @@
 #define SOFT_OVER_TEMP      0b00100000
 
 // controls whether or not we UART anything
-#define VERBOSE 1  // this will print PEC error count each cycle, any temperature and voltage cells that fault, 
+#define VERBOSE 0  // this will print PEC error count each cycle, any temperature and voltage cells that fault, 
 //                    the voltages of a whole segment if it has an overvoltage fault
-#define PRINT_TEMPS 0 // this will UART all temperatures
+#define PRINT_TEMPS 1 // this will UART all temperatures
 
 volatile uint8_t gFlag = 0;
 uint8_t gStatusMessage[7];
@@ -184,12 +184,14 @@ int8_t read_all_voltages(void) // Start Cell ADC Measurement
  * starts an ADC conversion for aux voltage 1, GPIO1.
  * Then it reads back the aux voltage data for all of the boards
  * Then it parses those into the temp_sensor_voltages array.
+ * 
+ * Note that only chip 2 has access to the i2c bus and all 24 therm readings 
  */
 int8_t read_all_temperatures(void)
 {
     int8_t error = 0;
 
-    const uint8_t MUX_CHANNELS = 8;
+    // const uint8_t MUX_CHANNELS = 8;
 
     wakeup_sleep(TOTAL_IC);
 
@@ -202,9 +204,9 @@ int8_t read_all_temperatures(void)
     _delay_us(10);
 
     // First four thermistors are in MUX3
-    for (uint8_t i = 0; i < 4; i++) {
+    for (uint8_t i = 0; i < TEMPS_PER_MUX; i++) {
 
-        mux_set_channel(TOTAL_IC, MUX3_ADDR, i);
+        mux_set_channel(TOTAL_IC, MUX3_ADDR, i); // sets mux channel for each IC in system 
         _delay_us(10);                             //Spec is 1600ns from stop cond.
         ltc6811_adax(MD_7KHZ_3KHZ, AUX_CH_GPIO1); //start ADC measurement for GPIO CH 1
         ltc6811_pollAdc();
@@ -213,7 +215,7 @@ int8_t read_all_temperatures(void)
         // Grab aux voltages into the temp voltages array
         for (uint8_t ic = 0; ic < TOTAL_IC; ic++) {
             //First four are out of order, 0123 are 2_2, 2_1, 1_2, and 1_1 respectively
-            temp_sensor_voltages[ic][3-i] = _aux_voltages[ic][0]; //Store temperatures
+            temp_sensor_voltages[ic][i] = _aux_voltages[ic][0]; //Store temperatures
         }
 
     }
@@ -222,7 +224,7 @@ int8_t read_all_temperatures(void)
     mux_disable(TOTAL_IC, MUX3_ADDR);
     _delay_us(10);
 
-    for (uint8_t i = 0; i < MUX_CHANNELS; i++) {
+    for (uint8_t i = 0; i < TEMPS_PER_MUX; i++) {
 
         mux_set_channel(TOTAL_IC, MUX2_ADDR, i);
         _delay_us(10);                             //Spec is 1600ns from stop cond.
@@ -233,7 +235,7 @@ int8_t read_all_temperatures(void)
         // Grab aux voltages into the temp voltages array
         for (uint8_t ic = 0; ic < TOTAL_IC; ic++) {
             //Sensors are in reverse order
-            temp_sensor_voltages[ic][NUM_TEMPS-9-i] = _aux_voltages[ic][0]; //Store temperatures
+            temp_sensor_voltages[ic][8+i] = _aux_voltages[ic][0]; //Store temperatures todo verify this is correct 
         }
 
     }
@@ -241,7 +243,7 @@ int8_t read_all_temperatures(void)
     mux_disable(TOTAL_IC, MUX2_ADDR);
     _delay_us(10);
 
-    for (uint8_t i = 0; i < MUX_CHANNELS; i++) {
+    for (uint8_t i = 0; i < TEMPS_PER_MUX; i++) {
 
         mux_set_channel(TOTAL_IC, MUX1_ADDR, i);
         _delay_us(10);                             //Spec is 1600ns from stop cond.
@@ -252,14 +254,20 @@ int8_t read_all_temperatures(void)
         // Grab aux voltages into the temp voltages array
         for (uint8_t ic = 0; ic < TOTAL_IC; ic++) {
             //Sensors are in reverse order, 0123 are 2_2, 2_1, 1_2, and 1_1 respectively
-            temp_sensor_voltages[ic][NUM_TEMPS-1-i] = _aux_voltages[ic][0]; //Store temperatures
+            temp_sensor_voltages[ic][16+i] = _aux_voltages[ic][0]; //Store temperatures
         }
     }
+
+    // now every other ic is gonna be filled with 0's so ... 
 
     mux_disable(TOTAL_IC, MUX1_ADDR);
     _delay_us(10);
 
     #if(PRINT_TEMPS==1)
+    sprintf(temp_msg, "\ntest\n"); 
+    LOG_println(temp_msg, strlen(temp_msg));
+
+
     for(int ic = 0; ic < TOTAL_IC; ic++) {
         sprintf(temp_msg, "t%d,%3d,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u,%5u", ic, error,
                         temp_sensor_voltages[ic][0],
@@ -292,8 +300,14 @@ int8_t read_all_temperatures(void)
         // Check temperature values for in-range ness
         gFlag &= ~(OVER_TEMP | SOFT_OVER_TEMP | UNDER_TEMP);
 
-        for (uint8_t ic = 0; ic < TOTAL_IC; ic ++) {
+
+        // ignore altenrating IC's here: 
+        for (uint8_t ic = 1; ic < TOTAL_IC; ic += 2) {
+
+        // for (uint8_t ic = 0; ic < TOTAL_IC; ic ++) {
             for (uint8_t sensor = 0; sensor < NUM_TEMPS; sensor ++) {
+
+
                 uint16_t sensor_value = temp_sensor_voltages[ic][sensor];
                 if (sensor_value < SOFT_OT_THRESHOLD) {
                     gFlag |= SOFT_OVER_TEMP;

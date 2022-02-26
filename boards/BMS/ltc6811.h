@@ -19,9 +19,14 @@
 #include "ltc6811_defs.h"
 
 #define TOTAL_IC    2
-#define NUM_CELLS   12 //There are 10, but we need to read all 12 back.
-#define NUM_TEMPS   20  //There are 20 temp sensors per segment
-#define NUM_AUX_CH  6   // There are 10 AUX voltages
+#define NUM_CELLS   8 //There are 10, but we need to read all 12 back.
+// #define NUM_TEMPS   20  //There are 20 temp sensors per segment
+// #define NUM_AUX_CH  6   // There are 10 AUX voltages
+
+
+#define NUM_TEMPS   24  //There are 20 temp sensors per segment
+#define NUM_AUX_CH  24   // There are 10 AUX voltages
+#define TEMPS_PER_MUX 8
 
 // Cell voltages read back from the peripheral board
 // LSbit = 0.0001V, i.e. 65535 -> 6.5535V

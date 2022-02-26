@@ -292,7 +292,7 @@ int8_t ltc6811_rdaux(uint8_t reg, //Determines which GPIO voltage register is re
 
     uint8_t data[NUM_RX_BYT*total_ic];
 
-    // If 0, read all of em.
+    // If 0, read all of em. todo: we dont need all the gpios we only need one of them ??
     if (reg == 0) {
 
         for (uint8_t gpio_reg = 1; gpio_reg<NUM_GPIO_REG+1; gpio_reg++) {                //executes once for each of the ltc6811 aux voltage registers
